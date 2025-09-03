@@ -1,5 +1,6 @@
 .venv
 .idea
+.idea
 API_KEYS.json
 trakt_plex.db
 trakt_token.json
