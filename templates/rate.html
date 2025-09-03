@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+  <title>Rate Unrated Films</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container mt-4">
+  <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4 rounded shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('dashboard') }}">Trakt ↔ Plex</a>
+      <div>
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'filmsInDB' %}active{% endif %}" href="{{ url_for('filmsInDB') }}">Films in DB</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'rate' %}active{% endif %}" href="{{ url_for('rate') }}">Rate Films</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+  <h1 class="mb-4">Rate Unrated Films</h1>
+
+  <!-- Ratings Reference Table -->
+  <div class="mb-4 sticky-top bg-white shadow-sm p-2 rounded" style="z-index: 1020;">
+    <h5>Ratings Guide</h5>
+    <table class="table table-bordered text-center">
+      <thead class="table-light">
+        <tr>
+          <th>1</th>
+          <th>2</th>
+          <th>3</th>
+          <th>4</th>
+          <th>5</th>
+          <th>6</th>
+          <th>7</th>
+          <th>8</th>
+          <th>9</th>
+          <th>10</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Worst</td>
+          <td>Terrible</td>
+          <td>Bad</td>
+          <td>Poor</td>
+          <td>Meh</td>
+          <td>Fair</td>
+          <td>Good</td>
+          <td>Great</td>
+          <td>Superb</td>
+          <td>Best</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Limit selector -->
+  <form method="get" action="{{ url_for('rate') }}" class="mb-3">
+    <div class="row g-2 align-items-center">
+      <div class="col-auto">
+        <label class="form-label mb-0">Films per page:</label>
+      </div>
+      <div class="col-auto">
+        <select name="limit" class="form-select form-select-sm" onchange="this.form.submit()">
+          {% for opt in [5,10,20,50] %}
+            <option value="{{ opt }}" {% if opt == limit %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <input type="hidden" name="page" value="1">
+  </form>
+
+  <!-- Films table -->
+  <form method="post">
+    <table class="table table-hover table-bordered align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Title</th>
+          <th>Rating (1–10)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for slug, title in films %}
+        <tr>
+          <td><a href="https://trakt.tv/movies/{{ slug }}" target="_blank">{{ title }}</a></td>
+          <td><input type="number" name="{{ slug }}" min="1" max="10" class="form-control form-control-sm"></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit" class="btn btn-success">Submit Ratings</button>
+  </form>
+
+  <!-- Pagination -->
+  <nav class="mt-3">
+    <ul class="pagination flex-wrap">
+      {% if page > 1 %}
+        <li class="page-item"><a class="page-link" href="{{ url_for('rate', page=page-1, limit=limit) }}">Previous</a></li>
+      {% endif %}
+
+      {% for p in range(1, total_pages+1) %}
+        <li class="page-item {% if p == page %}active{% endif %}">
+          <a class="page-link" href="{{ url_for('rate', page=p, limit=limit) }}">{{ p }}</a>
+        </li>
+      {% endfor %}
+
+      {% if page < total_pages %}
+        <li class="page-item"><a class="page-link" href="{{ url_for('rate', page=page+1, limit=limit) }}">Next</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+
+  <a href="{{ url_for('dashboard') }}" class="btn btn-link">Back to Dashboard</a>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
