@@ -116,13 +116,13 @@ SQLite database: `trakt_plex.db`
 > Placeholders for screenshots – add real images after running the app.
 
 ### Dashboard
-![Dashboard Placeholder](screenshots/dashboard.png)
+![Dashboard Placeholder](imgs/dashboard.png)
 
 ### Films in DB
-![Films Placeholder](screenshots/films.png)
+![Films Placeholder](imgs/films.png)
 
 ### Rate Films
-![Rate Placeholder](screenshots/rate.png)
+![Rate Placeholder](imgs/rate.png)
 
 ---
 
