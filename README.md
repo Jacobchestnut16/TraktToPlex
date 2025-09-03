@@ -22,7 +22,8 @@ It uses a local SQLite database to track watched movies, ratings, and unrated it
 
 - Python 3.9+  
 - A [Trakt.tv](https://trakt.tv) account  
-- Trakt API credentials ([Get them here](https://trakt.tv/oauth/applications))  
+- Trakt API credentials ([Get them here](https://trakt.tv/oauth/applications))
+    - None of the api endpoints used requires VIP, but do understand Trak limits api usage and will return `420	Account Limit Exceeded - list count, item count, etc` when that limit is exceeded. 
 
 ---
 
