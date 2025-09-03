@@ -1,11 +1,18 @@
-import datetime
-import json
-import sqlite3
-import requests
-import webbrowser
-import time
+import datetime, time, json, sqlite3
+import os
+import platform
+import shutil
+
+import requests, webbrowser, urllib.parse
 from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for
+
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 
 app = Flask(__name__)
 
@@ -204,29 +211,337 @@ def rateUnratedFilms():
             print(f"Skipped {title}")
     conn.close()
 
+# ---------Plex-------------
+
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.edge.service import Service as EdgeService
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.edge.options import Options as EdgeOptions
+from selenium.webdriver.safari.webdriver import WebDriver as SafariDriver
+
+def get_default_profile(browser):
+    system = platform.system().lower()
+    home = os.path.expanduser("~")
+
+    if browser == "chrome":
+        if system == "windows":
+            return os.path.join(os.environ["LOCALAPPDATA"], "Google/Chrome/User Data")
+        elif system == "darwin":  # macOS
+            return os.path.join(home, "Library/Application Support/Google/Chrome")
+        else:  # Linux
+            return os.path.join(home, ".config/google-chrome")
+
+    if browser == "brave":
+        if system == "windows":
+            return os.path.join(os.environ["LOCALAPPDATA"], "BraveSoftware/Brave-Browser/User Data")
+        elif system == "darwin":
+            return os.path.join(home, "Library/Application Support/BraveSoftware/Brave-Browser")
+        else:
+            return os.path.join(home, ".config/BraveSoftware/Brave-Browser")
+
+    if browser == "edge":
+        if system == "windows":
+            return os.path.join(os.environ["LOCALAPPDATA"], "Microsoft/Edge/User Data")
+        elif system == "darwin":
+            return os.path.join(home, "Library/Application Support/Microsoft Edge")
+        else:
+            return os.path.join(home, ".config/microsoft-edge")
+
+    if browser == "firefox":
+        if system == "windows":
+            return os.path.join(os.environ["APPDATA"], "Mozilla/Firefox/Profiles")
+        elif system == "darwin":
+            return os.path.join(home, "Library/Application Support/Firefox/Profiles")
+        else:
+            return os.path.join(home, ".mozilla/firefox")
+
+    return None
+
+def get_driver_auto():
+    system = platform.system().lower()
+
+    # Try detecting default browser name
+    try:
+        default_browser = webbrowser.get().name.lower()
+    except:
+        default_browser = ""
+
+    candidates = [
+        ("chrome", "chromedriver", ChromeService, ChromeOptions),
+        ("brave", "chromedriver", ChromeService, ChromeOptions),
+        ("firefox", "geckodriver", FirefoxService, FirefoxOptions),
+        ("edge", "msedgedriver", EdgeService, EdgeOptions),
+    ]
+
+    # if system == "darwin":
+    #     candidates.append(("safari", None, None, None))
+
+    for browser_name, driver_cmd, service_cls, options_cls in candidates:
+        if browser_name in default_browser:
+            if browser_name == "safari":
+                print("Launching Safari (default browser)")
+                return SafariDriver()
+            elif driver_cmd and shutil.which(driver_cmd):
+                print(f"Launching {browser_name} (default browser)")
+                options = options_cls()
+
+                # Try to attach to existing user profile
+                profile_path = get_default_profile(browser_name)
+                if profile_path and os.path.exists(profile_path):
+                    options.add_argument(f"user-data-dir={profile_path}")
+                    print(f"Using profile: {profile_path}")
+
+                if browser_name in ("chrome", "brave"):
+                    return webdriver.Chrome(service=service_cls(), options=options)
+                elif browser_name == "firefox":
+                    return webdriver.Firefox(service=service_cls(), options=options)
+                elif browser_name == "edge":
+                    return webdriver.Edge(service=service_cls(), options=options)
+
+    # Fallback loop
+    for browser_name, driver_cmd, service_cls, options_cls in candidates:
+        if browser_name == "safari" and system == "darwin":
+            print("Launching Safari (fallback)")
+            return SafariDriver()
+        elif driver_cmd and shutil.which(driver_cmd):
+            print(f"Launching {browser_name} (fallback)")
+            options = options_cls()
+
+            profile_path = get_default_profile(browser_name)
+            if profile_path and os.path.exists(profile_path):
+                options.add_argument(f"user-data-dir={profile_path}")
+                print(f"Using profile: {profile_path}")
+
+            if browser_name in ("chrome", "brave"):
+                return webdriver.Chrome(service=service_cls(), options=options)
+            elif browser_name == "firefox":
+                return webdriver.Firefox(service=service_cls(), options=options)
+            elif browser_name == "edge":
+                return webdriver.Edge(service=service_cls(), options=options)
+
+    raise RuntimeError("No supported browser/driver found.")
 
 
-def setPlexWatchHistory():
-    # check if the film is not entered into the plex history
-    ## if not inPlexHistory
-    # open a headless browser to the film on plex then press watched
-    # ensure to update the table that it was entered into plex history
-    pass
 
-def setPlexWatchRating():
+# def get_driver():
+#     profile_path = os.path.join(os.getcwd(), "chrome_profile")
+#
+#     chrome_options = Options()
+#     chrome_options.add_argument(f"--user-data-dir={profile_path}")
+#     chrome_options.add_argument("--profile-directory=Default")
+#
+#     return webdriver.Chrome(options=chrome_options)
+
+def ensureSignIn():
+    driver = get_driver_auto()
+    url = "https://app.plex.tv/desktop/#!"
+    driver.get(url)
+
+    wait = WebDriverWait(driver, 15)
+
+    try:
+        # Look for the profile/avatar icon (appears only if logged in)
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="user-menu-button"]')))
+        print("Already signed in to Plex")
+        return driver
+
+    except:
+        print("Not signed in. Please log in manually in the opened browser...")
+
+        # Wait until the login button disappears and profile is visible
+        WebDriverWait(driver, 300).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="user-menu-button"]'))
+        )
+        print("Sign in detected, session saved for future runs")
+        return driver
+
+def setPlexWatchHistory(driver):
+    conn = db_conn()
+    c = conn.cursor()
+
+    # get all unrated films that are not in Plex history
+    c.execute("SELECT title, year FROM history WHERE in_plex_history=0")
+    films = c.fetchall()
+
+    wait = WebDriverWait(driver, 15)
+
+    for title, year in films:
+        query = f"{title} {year}"
+        encoded_query = urllib.parse.quote(query)
+        url = f"https://app.plex.tv/desktop/#!/search?query={encoded_query}"
+        print(f"Searching Plex for: {title} ({year})")
+
+        driver.get(url)
+
+        try:
+            # wait for the search results to load
+            first_result = wait.until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "div.SearchResultListRow-container-eOnSD1 a")
+                )
+            )
+
+            # click the first result link
+            first_result.click()
+            print(f"Clicked first result for {title} ({year})")
+
+            # locate "Mark Watched" and click if needed
+            try:
+                watch_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-testid="preplay-togglePlayedState"]'))
+                )
+                watch_button.click()
+                print("Marked as Watched")
+
+                # update DB entry when successful
+                c.execute(
+                    "UPDATE history SET in_plex_history=1 WHERE title=? AND year=?",
+                    (title, year),
+                )
+                conn.commit()
+
+            except Exception as e:
+                print("Could not mark as watched:", e)
+        except Exception as e:
+            print(f"No results found for {title} ({year}): {e}")
+        break
+
+    conn.commit()
+    conn.close()
+
+def set_rating(driver, rating):
     """
-    Similar to watch history
+    Set Plex rating on the 0-10 scale.
+    Example: 7 = 3.5 stars, 10 = 5 stars.
     """
-    pass
+    # Find the slider element
+    slider = driver.find_element(By.CSS_SELECTOR, '[role="slider"]')
 
-def setPlexWatchHistoryAndRating():
-    """
-    This one does both setPlexWatchHistory() and setPlexWatchRating()
-    but at the same time this way there is less browser requests to the same page
-    ONLY WHEN NEITHER ARE FILLED IN AND BOTH ARE PRESENT IN THE DB
-    """
-    pass
+    # Get its size and location
+    slider_container = slider.find_element(By.XPATH, "..")  # parent span
+    width = slider_container.size['width']
 
+    # Clamp rating between 0–10
+    rating = max(0, min(10, rating))
+
+    # Calculate target x offset
+    # Each step is width/10
+    step = width / 10
+    target_offset = int(rating * step)
+
+    # Move and click
+    actions = ActionChains(driver)
+    actions.click_and_hold(slider).move_by_offset(target_offset - (width // 2), 0).release().perform()
+    
+    
+def setPlexWatchRating(driver):
+    conn = db_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT title, year, rating FROM history WHERE in_plex_rating=0 AND rated=1")
+    films = c.fetchall()
+
+    wait = WebDriverWait(driver, 15)
+
+    for title, year, rating in films:
+        query = f"{title} {year}"
+        encoded_query = urllib.parse.quote(query)
+        url = f"https://app.plex.tv/desktop/#!/search?query={encoded_query}"
+        print(f"Searching Plex for: {title} ({year})")
+
+        driver.get(url)
+
+        try:
+            first_result = wait.until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "div.SearchResultListRow-container-eOnSD1 a")
+                )
+            )
+            first_result.click()
+            print(f"Clicked first result for {title} ({year})")
+
+            try:
+                set_rating(driver, rating)
+                print(" Rating set")
+
+                # update DB entry
+                c.execute(
+                    "UPDATE history SET in_plex_rating=1 WHERE title=? AND year=?",
+                    (title, year),
+                )
+                conn.commit()
+
+            except Exception as e:
+                print(" Could not set rating:", e)
+
+        except Exception as e:
+            print(f"No results found for {title} ({year}): {e}")
+        break
+
+    conn.commit()
+    conn.close()
+
+
+def setPlexWatchHistoryAndRating(driver):
+    conn = db_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT title, year, rating FROM history WHERE in_plex_history=0 OR in_plex_rating=0")
+    films = c.fetchall()
+
+    wait = WebDriverWait(driver, 15)
+
+    for title, year, rating in films:
+        query = f"{title} {year}"
+        encoded_query = urllib.parse.quote(query)
+        url = f"https://app.plex.tv/desktop/#!/search?query={encoded_query}"
+        print(f"Searching Plex for: {title} ({year})")
+
+        driver.get(url)
+
+        try:
+            first_result = wait.until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "div.SearchResultListRow-container-eOnSD1 a")
+                )
+            )
+            first_result.click()
+            print(f"Clicked first result for {title} ({year})")
+
+            # Handle history
+            try:
+                watch_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-testid="preplay-togglePlayedState"]'))
+                )
+                watch_button.click()
+                print(" Marked as Watched")
+                c.execute(
+                    "UPDATE history SET in_plex_history=1 WHERE title=? AND year=?",
+                    (title, year),
+                )
+                conn.commit()
+            except Exception as e:
+                print(" Could not mark as watched:", e)
+
+            # Handle rating
+            try:
+                set_rating(driver, rating)
+                print(" Rating set")
+                c.execute(
+                    "UPDATE history SET in_plex_rating=1 WHERE title=? AND year=?",
+                    (title, year),
+                )
+                conn.commit()
+            except Exception as e:
+                print(" Could not set rating:", e)
+
+        except Exception as e:
+            print(f"No results found for {title} ({year}): {e}")
+
+    conn.commit()
+    conn.close()
 
 # ---------- ROUTES ----------
 @app.route("/")
@@ -238,7 +553,7 @@ def dashboard():
 def filmsInDB():
     conn = db_conn()
     c = conn.cursor()
-    c.execute("SELECT slug, title, rating, watched_at FROM history ORDER BY watched_at DESC")
+    c.execute("SELECT slug, title, rating, watched_at, year FROM history ORDER BY watched_at DESC")
     films = c.fetchall()
     conn.close()
     return render_template("films.html", films=films)
@@ -314,6 +629,17 @@ def sync(mode):
         getAllHistory(headers)
     elif mode == "ratings":
         getHistoryRating(headers)
+    return redirect(url_for("dashboard"))
+
+@app.route("/push/<mode>")
+def push(mode):
+    driver = ensureSignIn()
+    if mode == "history":
+        setPlexWatchHistory(driver)
+    elif mode == "ratings":
+        setPlexWatchRating(driver)
+    elif mode == "all":
+        setPlexWatchHistoryAndRating(driver)
     return redirect(url_for("dashboard"))
 
 if __name__ == "__main__":

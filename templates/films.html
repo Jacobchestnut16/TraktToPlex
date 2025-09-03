@@ -31,14 +31,18 @@
       <th>Title</th>
       <th>Rating</th>
       <th>Watched At</th>
+      <th>slug</th>
+      <th>year</th>
     </tr>
     </thead>
       <tbody>
-    {% for slug, title, rating, watched_at in films %}
+    {% for slug, title, rating, watched_at, year in films %}
     <tr>
       <td><a href="https://trakt.tv/movies/{{ slug }}" target="_blank">{{ title }}</a></td>
       <td>{{ rating if rating else "" }}</td>
       <td>{{ watched_at }}</td>
+      <td>{{ slug }}</td>
+      <td>{{ year }}</td>
     </tr>
     {% endfor %}
     </tbody>

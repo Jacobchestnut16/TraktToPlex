@@ -27,10 +27,17 @@
   <h1 class="mb-4">Dashboard</h1>
 
   <div class="mb-3">
-    <h4>Sync Tasks</h4>
+    <h4>Sync from Trakt Tasks</h4>
     <a href="{{ url_for('sync', mode='recent') }}" class="btn btn-primary btn-sm">Sync Recent History</a>
     <a href="{{ url_for('sync', mode='full') }}" class="btn btn-primary btn-sm">Sync Full History</a>
     <a href="{{ url_for('sync', mode='ratings') }}" class="btn btn-primary btn-sm">Sync Ratings</a>
+  </div>
+
+  <div class="mb-3">
+    <h4>Push to Plex Tasks</h4>
+    <a href="{{ url_for('push', mode='history') }}" class="btn btn-primary btn-sm">Push Watch History</a>
+    <a href="{{ url_for('push', mode='ratings') }}" class="btn btn-primary btn-sm">Push Ratings</a>
+    <a href="{{ url_for('push', mode='all') }}" class="btn btn-primary btn-sm">Push Watch History & Ratings</a>
   </div>
 
 </body>
