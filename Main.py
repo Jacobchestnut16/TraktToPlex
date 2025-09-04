@@ -1,6 +1,7 @@
 import datetime, time, json, sqlite3
 import os
 import platform
+import random
 import shutil
 
 import requests, webbrowser, urllib.parse
@@ -8,6 +9,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for
 
 from selenium import webdriver
+from selenium.common import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -213,149 +215,152 @@ def rateUnratedFilms():
 
 # ---------Plex-------------
 
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.firefox.service import Service as FirefoxService
-from selenium.webdriver.edge.service import Service as EdgeService
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.firefox.options import Options as FirefoxOptions
-from selenium.webdriver.edge.options import Options as EdgeOptions
-from selenium.webdriver.safari.webdriver import WebDriver as SafariDriver
-
-def get_default_profile(browser):
-    system = platform.system().lower()
-    home = os.path.expanduser("~")
-
-    if browser == "chrome":
-        if system == "windows":
-            return os.path.join(os.environ["LOCALAPPDATA"], "Google/Chrome/User Data")
-        elif system == "darwin":  # macOS
-            return os.path.join(home, "Library/Application Support/Google/Chrome")
-        else:  # Linux
-            return os.path.join(home, ".config/google-chrome")
-
-    if browser == "brave":
-        if system == "windows":
-            return os.path.join(os.environ["LOCALAPPDATA"], "BraveSoftware/Brave-Browser/User Data")
-        elif system == "darwin":
-            return os.path.join(home, "Library/Application Support/BraveSoftware/Brave-Browser")
-        else:
-            return os.path.join(home, ".config/BraveSoftware/Brave-Browser")
-
-    if browser == "edge":
-        if system == "windows":
-            return os.path.join(os.environ["LOCALAPPDATA"], "Microsoft/Edge/User Data")
-        elif system == "darwin":
-            return os.path.join(home, "Library/Application Support/Microsoft Edge")
-        else:
-            return os.path.join(home, ".config/microsoft-edge")
-
-    if browser == "firefox":
-        if system == "windows":
-            return os.path.join(os.environ["APPDATA"], "Mozilla/Firefox/Profiles")
-        elif system == "darwin":
-            return os.path.join(home, "Library/Application Support/Firefox/Profiles")
-        else:
-            return os.path.join(home, ".mozilla/firefox")
-
-    return None
-
-def get_driver_auto():
-    system = platform.system().lower()
-
-    # Try detecting default browser name
-    try:
-        default_browser = webbrowser.get().name.lower()
-    except:
-        default_browser = ""
-
-    candidates = [
-        ("chrome", "chromedriver", ChromeService, ChromeOptions),
-        ("brave", "chromedriver", ChromeService, ChromeOptions),
-        ("firefox", "geckodriver", FirefoxService, FirefoxOptions),
-        ("edge", "msedgedriver", EdgeService, EdgeOptions),
-    ]
-
-    # if system == "darwin":
-    #     candidates.append(("safari", None, None, None))
-
-    for browser_name, driver_cmd, service_cls, options_cls in candidates:
-        if browser_name in default_browser:
-            if browser_name == "safari":
-                print("Launching Safari (default browser)")
-                return SafariDriver()
-            elif driver_cmd and shutil.which(driver_cmd):
-                print(f"Launching {browser_name} (default browser)")
-                options = options_cls()
-
-                # Try to attach to existing user profile
-                profile_path = get_default_profile(browser_name)
-                if profile_path and os.path.exists(profile_path):
-                    options.add_argument(f"user-data-dir={profile_path}")
-                    print(f"Using profile: {profile_path}")
-
-                if browser_name in ("chrome", "brave"):
-                    return webdriver.Chrome(service=service_cls(), options=options)
-                elif browser_name == "firefox":
-                    return webdriver.Firefox(service=service_cls(), options=options)
-                elif browser_name == "edge":
-                    return webdriver.Edge(service=service_cls(), options=options)
-
-    # Fallback loop
-    for browser_name, driver_cmd, service_cls, options_cls in candidates:
-        if browser_name == "safari" and system == "darwin":
-            print("Launching Safari (fallback)")
-            return SafariDriver()
-        elif driver_cmd and shutil.which(driver_cmd):
-            print(f"Launching {browser_name} (fallback)")
-            options = options_cls()
-
-            profile_path = get_default_profile(browser_name)
-            if profile_path and os.path.exists(profile_path):
-                options.add_argument(f"user-data-dir={profile_path}")
-                print(f"Using profile: {profile_path}")
-
-            if browser_name in ("chrome", "brave"):
-                return webdriver.Chrome(service=service_cls(), options=options)
-            elif browser_name == "firefox":
-                return webdriver.Firefox(service=service_cls(), options=options)
-            elif browser_name == "edge":
-                return webdriver.Edge(service=service_cls(), options=options)
-
-    raise RuntimeError("No supported browser/driver found.")
-
-
-
-# def get_driver():
-#     profile_path = os.path.join(os.getcwd(), "chrome_profile")
+# from selenium.webdriver.chrome.service import Service as ChromeService
+# from selenium.webdriver.firefox.service import Service as FirefoxService
+# from selenium.webdriver.edge.service import Service as EdgeService
+# from selenium.webdriver.chrome.options import Options as ChromeOptions
+# from selenium.webdriver.firefox.options import Options as FirefoxOptions
+# from selenium.webdriver.edge.options import Options as EdgeOptions
+# from selenium.webdriver.safari.webdriver import WebDriver as SafariDriver
 #
-#     chrome_options = Options()
-#     chrome_options.add_argument(f"--user-data-dir={profile_path}")
-#     chrome_options.add_argument("--profile-directory=Default")
+# def get_default_profile(browser):
+#     system = platform.system().lower()
+#     home = os.path.expanduser("~")
 #
-#     return webdriver.Chrome(options=chrome_options)
+#     if browser == "chrome":
+#         if system == "windows":
+#             return os.path.join(os.environ["LOCALAPPDATA"], "Google/Chrome/User Data")
+#         elif system == "darwin":  # macOS
+#             return os.path.join(home, "Library/Application Support/Google/Chrome")
+#         else:  # Linux
+#             return os.path.join(home, ".config/google-chrome")
+#
+#     if browser == "brave":
+#         if system == "windows":
+#             return os.path.join(os.environ["LOCALAPPDATA"], "BraveSoftware/Brave-Browser/User Data")
+#         elif system == "darwin":
+#             return os.path.join(home, "Library/Application Support/BraveSoftware/Brave-Browser")
+#         else:
+#             return os.path.join(home, ".config/BraveSoftware/Brave-Browser")
+#
+#     if browser == "edge":
+#         if system == "windows":
+#             return os.path.join(os.environ["LOCALAPPDATA"], "Microsoft/Edge/User Data")
+#         elif system == "darwin":
+#             return os.path.join(home, "Library/Application Support/Microsoft Edge")
+#         else:
+#             return os.path.join(home, ".config/microsoft-edge")
+#
+#     if browser == "firefox":
+#         if system == "windows":
+#             return os.path.join(os.environ["APPDATA"], "Mozilla/Firefox/Profiles")
+#         elif system == "darwin":
+#             return os.path.join(home, "Library/Application Support/Firefox/Profiles")
+#         else:
+#             return os.path.join(home, ".mozilla/firefox")
+#
+#     return None
+#
+# def get_driver_auto():
+#     system = platform.system().lower()
+#
+#     # Try detecting default browser name
+#     try:
+#         default_browser = webbrowser.get().name.lower()
+#     except:
+#         default_browser = ""
+#
+#     candidates = [
+#         ("chrome", "chromedriver", ChromeService, ChromeOptions),
+#         ("brave", "chromedriver", ChromeService, ChromeOptions),
+#         ("firefox", "geckodriver", FirefoxService, FirefoxOptions),
+#         ("edge", "msedgedriver", EdgeService, EdgeOptions),
+#     ]
+#
+#     # if system == "darwin":
+#     #     candidates.append(("safari", None, None, None))
+#
+#     for browser_name, driver_cmd, service_cls, options_cls in candidates:
+#         if browser_name in default_browser:
+#             if browser_name == "safari":
+#                 print("Launching Safari (default browser)")
+#                 return SafariDriver()
+#             elif driver_cmd and shutil.which(driver_cmd):
+#                 print(f"Launching {browser_name} (default browser)")
+#                 options = options_cls()
+#
+#                 # Try to attach to existing user profile
+#                 profile_path = get_default_profile(browser_name)
+#                 if profile_path and os.path.exists(profile_path):
+#                     options.add_argument(f"user-data-dir={profile_path}")
+#                     print(f"Using profile: {profile_path}")
+#
+#                 if browser_name in ("chrome", "brave"):
+#                     return webdriver.Chrome(service=service_cls(), options=options)
+#                 elif browser_name == "firefox":
+#                     return webdriver.Firefox(service=service_cls(), options=options)
+#                 elif browser_name == "edge":
+#                     return webdriver.Edge(service=service_cls(), options=options)
+#
+#     # Fallback loop
+#     for browser_name, driver_cmd, service_cls, options_cls in candidates:
+#         if browser_name == "safari" and system == "darwin":
+#             print("Launching Safari (fallback)")
+#             return SafariDriver()
+#         elif driver_cmd and shutil.which(driver_cmd):
+#             print(f"Launching {browser_name} (fallback)")
+#             options = options_cls()
+#
+#             profile_path = get_default_profile(browser_name)
+#             if profile_path and os.path.exists(profile_path):
+#                 options.add_argument(f"user-data-dir={profile_path}")
+#                 print(f"Using profile: {profile_path}")
+#
+#             if browser_name in ("chrome", "brave"):
+#                 return webdriver.Chrome(service=service_cls(), options=options)
+#             elif browser_name == "firefox":
+#                 return webdriver.Firefox(service=service_cls(), options=options)
+#             elif browser_name == "edge":
+#                 return webdriver.Edge(service=service_cls(), options=options)
+#
+#     raise RuntimeError("No supported browser/driver found.")
+
+
+
+def get_driver():
+    profile_path = os.path.join(os.getcwd(), "chrome_profile")
+
+    chrome_options = Options()
+    chrome_options.add_argument(f"--user-data-dir={profile_path}")
+    chrome_options.add_argument("--profile-directory=Profile1")
+
+    return webdriver.Chrome(options=chrome_options)
 
 def ensureSignIn():
-    driver = get_driver_auto()
+    driver = get_driver()
     url = "https://app.plex.tv/desktop/#!"
     driver.get(url)
 
     wait = WebDriverWait(driver, 15)
 
     try:
-        # Look for the profile/avatar icon (appears only if logged in)
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="user-menu-button"]')))
-        print("Already signed in to Plex")
-        return driver
-
-    except:
+        # If we see the sign in button, user is NOT signed in
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="signInButton"]')))
         print("Not signed in. Please log in manually in the opened browser...")
 
-        # Wait until the login button disappears and profile is visible
-        WebDriverWait(driver, 300).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="user-menu-button"]'))
+        # Poll until the sign-in button disappears
+        WebDriverWait(driver, 300).until_not(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="signInButton"]'))
         )
-        print("Sign in detected, session saved for future runs")
-        return driver
+        print("Sign in detected, session ready")
+
+    except TimeoutException:
+        # If signInButton never appears, assume already signed in
+        print("No sign-in button detected, assuming already signed in")
+
+    return driver
+
+
 
 def setPlexWatchHistory(driver):
     conn = db_conn()
@@ -367,7 +372,7 @@ def setPlexWatchHistory(driver):
 
     wait = WebDriverWait(driver, 15)
 
-    for title, year in films:
+    for i, (title, year) in enumerate(films, start=1):
         query = f"{title} {year}"
         encoded_query = urllib.parse.quote(query)
         url = f"https://app.plex.tv/desktop/#!/search?query={encoded_query}"
@@ -390,7 +395,9 @@ def setPlexWatchHistory(driver):
             # locate "Mark Watched" and click if needed
             try:
                 watch_button = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-testid="preplay-togglePlayedState"]'))
+                    EC.element_to_be_clickable(
+                        (By.CSS_SELECTOR, 'button[data-testid="preplay-togglePlayedState"]')
+                    )
                 )
                 watch_button.click()
                 print("Marked as Watched")
@@ -404,37 +411,21 @@ def setPlexWatchHistory(driver):
 
             except Exception as e:
                 print("Could not mark as watched:", e)
+
         except Exception as e:
             print(f"No results found for {title} ({year}): {e}")
-        break
+
+        # short wait between items
+        time.sleep(random.uniform(1, 3))
+
+        # longer wait every 5 items
+        if i % 5 == 0:
+            longer_wait = random.uniform(15, 30)  # random 15-30 seconds
+            print(f"Pausing for {longer_wait:.1f} seconds to avoid detection...")
+            time.sleep(longer_wait)
 
     conn.commit()
     conn.close()
-
-def set_rating(driver, rating):
-    """
-    Set Plex rating on the 0-10 scale.
-    Example: 7 = 3.5 stars, 10 = 5 stars.
-    """
-    # Find the slider element
-    slider = driver.find_element(By.CSS_SELECTOR, '[role="slider"]')
-
-    # Get its size and location
-    slider_container = slider.find_element(By.XPATH, "..")  # parent span
-    width = slider_container.size['width']
-
-    # Clamp rating between 0–10
-    rating = max(0, min(10, rating))
-
-    # Calculate target x offset
-    # Each step is width/10
-    step = width / 10
-    target_offset = int(rating * step)
-
-    # Move and click
-    actions = ActionChains(driver)
-    actions.click_and_hold(slider).move_by_offset(target_offset - (width // 2), 0).release().perform()
-    
     
 def setPlexWatchRating(driver):
     conn = db_conn()
@@ -463,15 +454,54 @@ def setPlexWatchRating(driver):
             print(f"Clicked first result for {title} ({year})")
 
             try:
-                set_rating(driver, rating)
-                print(" Rating set")
+                # press the rate and review button
+                rate_button = wait.until(
+                    EC.element_to_be_clickable(
+                        (By.XPATH, "//button[.//span[text()='Rate & Review']]")
+                    )
+                )
+                rate_button.click()
+
+                # todo: select the stars level in the popup window
+                # todo: fix the issue where it doesnt move the slider
+                slider = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "_1y79ovu5")))
+                rating_container = driver.find_element(By.CLASS_NAME, "_1h4p3k00")
+
+                # Optional: keep the stars element for logging
+                stars = rating_container.find_elements(By.CLASS_NAME, "rkbrtb0")
+                star_svg = stars[int(round(rating / 2)) - 1]
+
+                print(f"Intended rating: {rating}/10 (visual star index {int(round(rating / 2))})")
+
+                # Set slider value directly and trigger input/change events
+                driver.execute_script("""
+                    const s = arguments[0];
+                    const val = arguments[1];
+                    s.value = val;  // update the slider's internal value
+                    s.setAttribute('aria-valuenow', val);
+                    s.dispatchEvent(new Event('input', { bubbles: true }));
+                    s.dispatchEvent(new Event('change', { bubbles: true }));
+                """, slider, int(rating))
+
+                thumb = slider.find_element(By.XPATH, ".//span[contains(@style,'transform')]")
+                width = slider.size['width']
+                target_x = (rating / 10) * width - thumb.size['width'] / 2
+
+                actions = ActionChains(driver)
+                actions.click_and_hold(thumb).move_by_offset(target_x, 0).release().perform()
+
+                print("Rating set via slider.")
+
+                # todo: press save
+
+                pass # remove and readd update DB when above works as expected
 
                 # update DB entry
-                c.execute(
-                    "UPDATE history SET in_plex_rating=1 WHERE title=? AND year=?",
-                    (title, year),
-                )
-                conn.commit()
+                # c.execute(
+                #     "UPDATE history SET in_plex_rating=1 WHERE title=? AND year=?",
+                #     (title, year),
+                # )
+                # conn.commit()
 
             except Exception as e:
                 print(" Could not set rating:", e)
@@ -527,7 +557,6 @@ def setPlexWatchHistoryAndRating(driver):
 
             # Handle rating
             try:
-                set_rating(driver, rating)
                 print(" Rating set")
                 c.execute(
                     "UPDATE history SET in_plex_rating=1 WHERE title=? AND year=?",
@@ -637,9 +666,11 @@ def push(mode):
     if mode == "history":
         setPlexWatchHistory(driver)
     elif mode == "ratings":
-        setPlexWatchRating(driver)
+        # setPlexWatchRating(driver)
+        pass
     elif mode == "all":
-        setPlexWatchHistoryAndRating(driver)
+        # setPlexWatchHistoryAndRating(driver)
+        pass
     return redirect(url_for("dashboard"))
 
 if __name__ == "__main__":
